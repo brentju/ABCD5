@@ -9,6 +9,7 @@ import pandas as pd
 from abcd.utils.io import dump_df, load_df, dump_pkl, load_pkl
 from abcd.plotting.pygal.training_progress import plot_progress
 from abcd.plotting.pygal.rendering import save
+import pdb
 
 class Trainer():
     def __init__(self, trainer_path, device, optimizer, loss_f, metrics=None, seed=None):
@@ -19,7 +20,7 @@ class Trainer():
         self.name = self.__class__.__name__
         self.device = device
         self.optimizer = optimizer
-        self.loss_f = loss_f
+        self.loss_f = loss_f.to(device)
         self.loss_tracking = []    
         # Store entries as [epoch, dataset name, metric 1, metric 2, ..., metric n]
         self.metrics = metrics
@@ -28,7 +29,7 @@ class Trainer():
         self.loss_trajectory = []
         self.seed = seed
         
-    def train(self, model, train_dataloader, eval_dataloaders, 
+    def train(self, model, train_dataloaders, test_dataloaders,
               nr_epochs, starting_from_epoch=0,
               print_loss_every=5, eval_every=7, export_every=20, verbose=True):
         '''Trains a model for a given number of epochs. States and results are always recorded for
@@ -42,22 +43,25 @@ class Trainer():
             self.loss_trajectory = list(filter(lambda x: x[0] < starting_from_epoch, self.loss_trajectory))
             self.progress = list(filter(lambda x: x[0] < starting_from_epoch, self.progress))
         # Run training, storing intermediate progress
-        for t in tqdm(range(starting_from_epoch, starting_from_epoch+nr_epochs)):
-            # Run evaluation before executing the epoch
-            if t % eval_every == 0:
-                self.eval(model, eval_dataloaders, epoch_ix=t, verbose=verbose)
-            if t % export_every == 0:
-                self.export(model, state_name="epoch{}".format(t), verbose=verbose)
-            if self.seed is not None:
-                train_dataloader.generator.manual_seed(self.seed+t)            
-            loss_value = self.train_epoch(model, train_dataloader)
-            if t % print_loss_every == 0 and verbose:
-                print("Ending epoch {}, loss {}".format(t+1, loss_value))
-        # Save final progress
-        if verbose:
-            print('Finished training')
-        self.eval(model, eval_dataloaders, epoch_ix=t+1, verbose=verbose)
-        self.export(model, state_name="epoch{}".format(t+1), verbose=verbose)
+        self.eval(model, test_dataloaders, epoch_ix=0, verbose=verbose)
+        for dataloader_name, train_dataloader in train_dataloaders.items():
+            for t in tqdm(range(starting_from_epoch, starting_from_epoch+nr_epochs)):
+                # Run evaluation before executing the epoch
+                if t % eval_every == 0:
+                    self.eval(model, test_dataloaders, epoch_ix=t, verbose=verbose)
+                if t % export_every == 0:
+                    self.export(model, state_name="epoch{}".format(t), verbose=verbose)
+                if self.seed is not None:
+                    train_dataloader.generator.manual_seed(self.seed+t)            
+                loss_value = self.train_epoch(model, train_dataloader)
+                if t % print_loss_every == 0 and verbose:
+                    print("Ending epoch {}, loss {}".format(t+1, loss_value))
+            # Save final progress
+            if verbose:
+                print('Finished training')
+            self.eval(model, test_dataloaders, epoch_ix=t+1, verbose=verbose)
+            self.export(model, state_name="epoch{}".format(t+1), verbose=verbose)
+            starting_from_epoch += nr_epochs
         
     def train_epoch(self, model, dataloader, records_per_epoch=0):
         '''Trains a model for 1 epoch'''

@@ -5,7 +5,7 @@ import os
 import torch
 import numpy as np
 from abcd.training.Trainer import Trainer
-from abcd.validation.metrics.classification import confusion_matrix, balanced_accuracy, f1
+from abcd.validation.metrics.classification import confusion_matrix, balanced_accuracy, f1, accuracy
 from abcd.plotting.seaborn.confusion_matrix import plot_confusion_matrix
 from abcd.plotting.seaborn.rendering import save
 SEED = 0
@@ -15,14 +15,14 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-METRICS = {"B-Acc.": balanced_accuracy, "F1": f1}
+METRICS = {"B-Acc.": balanced_accuracy, "F1": f1, "Accuracy": accuracy}
 
 class ClassifierTrainer(Trainer):
     def __init__(self,  *args, labels=None, **kwargs):
         self.labels = labels
         super(ClassifierTrainer, self).__init__(*args, **kwargs)
         if self.metrics is None:
-            self.metrics = ["B-Acc.", "F1"]
+            self.metrics = ["B-Acc.", "F1", 'Accuracy']
         
     def eval(self, model, eval_dataloaders, epoch_ix, verbose=False):
         '''Evaluates a model w.r.t. given metrics. Prints and saves this progress.'''
